@@ -1,0 +1,31 @@
+{
+  "name": "flexic/log",
+  "type": "library",
+  "description": "Flexic component package",
+  "keywords": [],
+  "homepage": "https://www.themepoint.de",
+  "license": "GPL-3.0-or-later",
+  "version": "1.0.0",
+  "authors": [
+    {
+      "name": "Hendrik Legge",
+      "email": "hendrik.legge@themepoint.de",
+      "homepage": "https://www.themepoint.de",
+      "role": "Developer"
+    }
+  ],
+  "require": {
+    "php" : "^7.1.3"
+  },
+  "require-dev": {},
+  "autoload": {
+    "psr-4": {
+      "Flexic\\Log\\": "src"
+    },
+    "exclude-from-classmap": ["tests", "test", "dev"]
+  },
+  "config": {
+    "sort-packages": true
+  },
+  "minimum-stability": "dev"
+}
