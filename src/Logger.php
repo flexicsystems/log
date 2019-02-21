@@ -15,161 +15,144 @@ declare(strict_types=1);
 
 namespace Flexic\Log;
 
-class Logger
+use Flexic\Log\Exceptions\InvalidArgumentException;
+use Flexic\Log\Exceptions\LevelException;
+use Flexic\Log\Exceptions\LogicException;
+use Flexic\Log\Interfaces\HandlerInterface;
+use Flexic\Log\Interfaces\LoggerInterface;
+
+class Logger implements LoggerInterface
 {
-    const NONE = 0;
-    const DEBUG = 100;
-    const INFO = 200;
-    const NOTICE = 250;
-    const WARNING = 300;
-    const ERROR = 400;
-    const CRITICAL = 500;
-    const ALERT = 550;
-    const EMERGENCY = 600;
-    const EXCEPTION = 700;
+    /**
+     * @var string
+     */
+    private $channel;
 
     /**
      * @var array
      */
-    public static $levels = array(
-        self::NONE => 'NONE',
-        self::DEBUG => 'DEBUG',
-        self::INFO => 'INFO',
-        self::NOTICE => 'NOTICE',
-        self::WARNING => 'WARNING',
-        self::ERROR => 'ERROR',
-        self::CRITICAL => 'CRITICAL',
-        self::EMERGENCY => 'EMERGENCY',
-        self::EXCEPTION => 'EXCEPTION',
-    );
+    private $handlers;
 
     /**
-     * @var int
+     * @var array
      */
-    public static $logLevel = self::DEBUG;
+    private $processors;
 
-    /**
-     * @var string
-     */
-    public static $format = '[#:LEVEL:#] #:MESSAGE:# { #:CONTEXT:# }';
-
-    /**
-     * @var string
-     */
-    public static $fallbackFile = '/var/log/log.log';
-
-    /**
-     * @var string
-     */
-    public static $contextSeparator = ' | ';
-
-    /**
-     * @var string
-     */
-    public static $timeFormat = 'Y-m-d H:i:s';
-
-    /**
-     * @var bool
-     */
-    public static $emptyLineAfter = false;
-
-    /**
-     * @var int
-     */
-    protected static $count = 0;
-
-    /**
-     * @param string $message
-     * @param int    $level
-     * @param string $file
-     * @param array  $context
-     *
-     * @return bool
-     */
-    public static function log(string $message, int $level = self::DEBUG, string $file = '/var/log/log.log', array $context = array())
+    public function __construct(string $channel, array $handlers = array(), array $processors = array())
     {
-        if ($level === self::NONE) {
-            return false;
-        }
-
-        ++self::$count;
-
-        if (!array_key_exists($level, self::$levels)) {
-            $level = self::DEBUG;
-        }
-
-        $file = realpath($file);
-
-        if ($file === false) {
-            return false;
-        }
-
-        $file = is_file($file) ? $file : self::$fallbackFile;
-
-        if (!is_file($file) || !is_readable($file) || !is_writable($file)) {
-            return false;
-        }
-
-        $result = file_put_contents($file, self::getFormattedMessage($message, $level, implode(self::$contextSeparator, $context)) . PHP_EOL, FILE_APPEND);
-
-        return $result !== false ? true : false;
+        $this->channel = $channel;
+        $this->handlers = $handlers;
+        $this->processors = $processors;
     }
 
-    /**
-     * @param \Exception $exception
-     * @param string     $file
-     * @param array      $context
-     *
-     * @return bool
-     */
-    public static function logException(\Exception $exception, string $file = '/var/log/exceptions.log', array $context = array())
+    public function pushHandler(HandlerInterface $handler): self
     {
-        $file = realpath($file);
+        array_unshift($this->handlers, $handler);
 
-        if ($file === false) {
-            return false;
-        }
-
-        $file = is_file($file) ? $file : self::$fallbackFile;
-
-        if (!is_file($file) || !is_readable($file) || !is_writable($file)) {
-            return false;
-        }
-
-        ++self::$count;
-
-        $result = file_put_contents($file, self::getFormattedMessage($exception->getMessage(), self::EXCEPTION, implode(self::$contextSeparator, $context)) . PHP_EOL, FILE_APPEND);
-
-        return $result !== false ? true : false;
+        return $this;
     }
 
-    /**
-     * @return int
-     */
-    public static function getCount()
+    public function popHandler(): HandlerInterface
     {
-        return self::$count;
+        if (\count($this->handlers) === 0) {
+            throw new LogicException('Could not pop from empty handler stack');
+        }
+
+        return array_shift($this->handlers);
     }
 
-    /**
-     * Format message.
-     *
-     * @param string $message
-     * @param int    $level
-     * @param string $context
-     *
-     * @return mixed
-     */
-    protected static function getFormattedMessage(string $message, int $level, string $context)
+    public function pushProcessor(callable $handler): self
     {
-        $result = str_replace('#:LEVEL:#', self::$levels[$level], self::$format);
-        $result = str_replace('#:MESSAGE:#', $message, $result);
-        $result = str_replace('#:CONTEXT:#', $context, $result);
-        $result = str_replace('#:COUNT:#', (string) self::$count, $result);
-        $result = str_replace('#:SESSION:#', session_id() === '' ? 'No Session ID' : session_id(), $result);
-        $result = str_replace('#:TIME_INT:#', (string) time(), $result);
-        $result = str_replace('#:TIME:#', (string) date(self::$timeFormat, time()), $result);
+        array_unshift($this->processors, $handler);
 
-        return self::$emptyLineAfter ? $result . PHP_EOL : $result;
+        return $this;
+    }
+
+    public function popProcessor(): callable
+    {
+        if (\count($this->handlers) === 0) {
+            throw new LogicException('Could not pop from empty processor stack');
+        }
+
+        return array_shift($this->processors);
+    }
+
+    public function emergency(string $message, array $context): void
+    {
+        $this->log(LogLevel::EMERGENCY, $message, $context);
+    }
+
+    public function alert(string $message, array $context): void
+    {
+        $this->log(LogLevel::ALERT, $message, $context);
+    }
+
+    public function critical(string $message, array $context): void
+    {
+        $this->log(LogLevel::CRITICAL, $message, $context);
+    }
+
+    public function error(string $message, array $context): void
+    {
+        $this->log(LogLevel::ERROR, $message, $context);
+    }
+
+    public function warning(string $message, array $context): void
+    {
+        $this->log(LogLevel::WARNING, $message, $context);
+    }
+
+    public function notice(string $message, array $context): void
+    {
+        $this->log(LogLevel::NOTICE, $message, $context);
+    }
+
+    public function info(string $message, array $context): void
+    {
+        $this->log(LogLevel::INFO, $message, $context);
+    }
+
+    public function debug(string $message, array $context): void
+    {
+        $this->log(LogLevel::DEBUG, $message, $context);
+    }
+
+    public function exception(\Exception $exception): void
+    {
+        $this->log(LogLevel::ERROR, $exception->getMessage(), array());
+    }
+
+    public function log(string $level, string $message, array $context): void
+    {
+        if (!\in_array($level, LogLevel::$levels)) {
+            throw new LevelException(sprintf('Debug level %s is not defined', $level));
+        }
+
+        preg_match_all('/\{[\s]?([a-zA-Z0-9]*)[\s]?}/', $message, $placeholders);
+        $keys = array_keys($context);
+
+        if (!\is_array($placeholders) || !\is_array($keys)) {
+            throw new LogicException('Could not compare placeholders and context keys.');
+        }
+
+        if (sort($keys) !== sort($placeholders)) {
+            throw new InvalidArgumentException('Placeholders in messages are not equal with context keys.');
+        }
+
+        $request = array(
+            'message' => $message,
+            'context' => $context,
+            'level' => $level,
+            'channel' => $this->channel,
+            'timestamp' => time(),
+        );
+
+        foreach ($this->processors as $processor) {
+            $request = \call_user_func($processor, $request);
+        }
+
+        foreach ($this->handlers as $handler) {
+            $handler->handle($request);
+        }
     }
 }
