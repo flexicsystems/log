@@ -128,7 +128,7 @@ class Logger implements LoggerInterface
             throw new LevelException(sprintf('Debug level %s is not defined', $level));
         }
 
-        preg_match_all('/\{[\s]?([a-zA-Z0-9]*)[\s]?}/', $message, $placeholders);
+        preg_match_all('/\{[\s]*?([a-zA-Z0-9]*)[\s]*?}/', $message, $placeholders);
         $keys = array_keys($context);
 
         if (!\is_array($placeholders) || !\is_array($keys)) {
